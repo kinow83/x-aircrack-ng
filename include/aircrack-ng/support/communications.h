@@ -170,6 +170,8 @@ struct communication_options
 
 	int quiet;
 	int verbose;
+
+	char x_mode[32];
 };
 
 struct devices
