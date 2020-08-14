@@ -229,6 +229,14 @@ struct APt
 	int pwr[REQUESTS];
 };
 
+struct SESSIONt
+{
+	unsigned char essid[255];
+	unsigned char bssid[6];
+	unsigned char climac[6];
+	unsigned char chan;
+};
+
 static struct APt ap[MAX_APS];
 
 unsigned long nb_pkt_sent;
@@ -5963,6 +5971,102 @@ static int do_attack_test(void)
 	return 0;
 }
 
+static size_t make_tag(uint8_t *h, uint8_t tag_num, size_t tag_len, uint8_t *tag_val)
+{
+	h[0] = tag_num;
+	h[1] = tag_len;
+	memcpy(&h[2], tag_val, tag_len);
+	return tag_len+2;
+}
+
+static size_t make_etag(uint8_t *h, uint8_t tag_num, size_t tag_len, uint8_t *tag_val)
+{
+	h[0] = 0xFF;
+	h[1] = tag_len+1;
+	h[2] = tag_num;
+	memcpy(&h[3], tag_val, tag_len);
+	return tag_len+3;
+}
+
+static int generate_beacon(struct SESSIONt *ss)
+{
+#define BEACON \
+	"\x80\x00\x00\x00" \
+	"\xff\xff\xff\xff\xff\xff" \
+	"\xd8\xb1\x90\xb3\x00\xaf" \
+	"\xd8\xb1\x90\xb3\x00\xaf" \
+	"\x80\x87"
+
+	uint32_t off = 0;
+	static uint16_t seq = 0;
+	static uint64_t timestamp = 0;
+	memcpy(h80211+off, BEACON, 10); off += 10; // dest
+	memcpy(h80211+off, ss->bssid, 6); off += 6; // bssid
+	memcpy(h80211+off, ss->bssid, 6); off += 6; // src
+	seq += 16;
+	memcpy(h80211+off, &seq, 2); off += 2;
+	timestamp += 65536;
+	memcpy(h80211+off, &timestamp, 8); off += 8;
+	memcpy(h80211+off, (uint8_t *)"\x64\x00", 2); off += 2; // beacon interval
+	memcpy(h80211+off, (uint8_t *)"\x11\x04", 2); off += 2; // capabilities
+
+	off += make_tag(h80211+off, 0, strlen((char*)ss->essid), (uint8_t *)ss->essid);
+	off += make_tag(h80211+off, 1, 8, (uint8_t *)"\x8c\x12\x98\x24\xb0\x48\x60\x6c");
+	off += make_tag(h80211+off, 3, 1, &ss->chan);
+
+	// 802.11n HT capabilies
+	off += make_tag(h80211+off, 45, 26, (uint8_t *)"\x6f\x09\x03\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00");
+	// 802.11n HT information
+	off += make_tag(h80211+off, 61, 22, (uint8_t *)"\x30\x07\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00");	
+
+	// 802.11ac VHT capabilies
+	off += make_tag(h80211+off, 191, 12, (uint8_t *)"\x72\x01\x80\x33\xaa\xaa\x00\x00\xfe\xff\x00\x20");
+	// 802.11ac VHT Operation
+	off += make_tag(h80211+off, 192, 5, (uint8_t *)"\x01\x2a\x00\x00\x00");
+	//802.11ac VHT Power Envelope
+	off += make_tag(h80211+off, 195, 4, (uint8_t *)"\x02\x68\x68\x68");
+
+	 // RSN
+	off += make_tag(h80211+off, 48, 26, (uint8_t *)"\x01\x00\x00\x0f\xac\x04\x01\x00\x00\x0f\xac\x04\x01\x00\x00\x0f\xac\x08\xc0\x00\x00\x00\x00\x0f\xac\x06");
+	
+	// 802.11ax HE Operation
+	off += make_etag(h80211+off, 36, 6, (uint8_t *)"\xf4\x3f\x00\x02\xfc\xff");	
+	// 802.11ax HE capabilies
+	off += make_etag(h80211+off, 35, 25, (uint8_t *)"\x0d\x01\x00\x1a\x40\x00\x04\x60\x08\x00\x00\x00\x80\x04\x00\x08\x00\xfe\xff\xfe\xff\x78\x1c\xc7\x71");
+
+	
+
+	if (send_packet(_wi_out, h80211, (size_t) off, kRewriteDuration) < 0)
+		return (1);
+
+	printf("beacon: [%02X:%02X:%02X:%02X:%02X:%02X] [%s]\n", 
+		ss->bssid[0],ss->bssid[1],ss->bssid[2],ss->bssid[3],ss->bssid[4],ss->bssid[5], ss->essid);
+	for (int i=0; i<off; i++) {
+		printf("%02x ", h80211[i]);
+	}
+	printf("\n");
+	return (0);
+}
+
+static int generate_wlan(void)
+{
+	struct SESSIONt ss = {0, };
+	memcpy(ss.bssid, opt.r_bssid, 6);
+	memcpy(ss.climac, opt.r_smac, 6);
+	ss.chan = 1;
+	memcpy(ss.essid, opt.r_essid, strlen(opt.r_essid));
+
+#if 0
+	while (!generate_beacon(&ss)) {
+		sleep(1);
+	}
+	return (0);
+#else
+	return generate_beacon(&ss);
+#endif
+}
+
+
 int main(int argc, char * argv[])
 {
 	int n, i, ret;
@@ -6037,7 +6141,8 @@ int main(int argc, char * argv[])
 		int option = getopt_long(argc,
 								 argv,
 								 "b:d:s:m:n:u:v:t:Z:T:f:g:w:x:p:a:c:h:e:ji:r:k:"
-								 "l:y:o:q:Q0:1:23456789HFBDR",
+								 "l:y:o:q:Q0:1:23456789HFBDR"
+								 "X",
 								 long_options,
 								 &option_index);
 
@@ -6486,6 +6591,17 @@ int main(int argc, char * argv[])
 				opt.a_mode = 8;
 				break;
 
+			case 'X':
+
+				if (opt.a_mode != -1)
+				{
+					printf("Attack mode already specified.\n");
+					printf("\"%s --help\" for help.\n", argv[0]);
+					return (1);
+				}
+				opt.a_mode = 10;
+				break;
+
 			case 'F':
 
 				opt.fast = 1;
@@ -6777,6 +6893,9 @@ int main(int argc, char * argv[])
 			return (do_attack_migmode());
 		case 9:
 			return (do_attack_test());
+		case 10: {
+			return (generate_wlan());
+		}
 		default:
 			break;
 	}
