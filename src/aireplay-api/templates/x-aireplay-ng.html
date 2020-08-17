@@ -1,0 +1,64 @@
+<script src="https://cdn.jsdelivr.net/npm/vue"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+<div id="app">
+    <p>[[ title ]]</p>
+    FRMAE <select v-model="frame_type">
+        <option value="beacon">BEACON</option>
+        <option value="data">DATA</option>
+    </select>
+
+    <template v-if="frame_type == 'beacon'">
+        <p>
+            <label>ESSID</label> <input placeholder="public-wifi" v-model="essid"></br>
+            <label>BSSID</label> <input placeholder="00:00:00:00:00:00" v-model="bssid">
+        </p>
+    </template>
+    <template v-else-if="frame_type == 'data'">
+        <p>
+            <label>BSSID</label> <input placeholder="00:00:00:00:00:00" v-model="bssid"></br>
+            <label>SRCMAC</label> <input placeholder="00:00:00:00:00:00" v-model="srcmac"></br>
+            <label>DSTMAC</label> <input placeholder="00:00:00:00:00:00" v-model="dstmac"></br>
+        </p>
+    </template>
+    <p>
+        <button v-on:click="aireplay_handler">send</button>
+    </p>
+</div>
+
+
+<script>
+    new Vue({
+        el: '#app',
+        delimiters: ['[[', ']]'],
+        data: {
+            title: 'X-aireplay-ng',
+            frame_type: 'beacon',
+            bssid: '',
+            srcmac: '',
+            dstmac: '',
+            essid: '',
+            data: {}
+        },
+        methods: {
+            aireplay_handler: function (event) {
+                if (this.frame_type == 'beacon') {
+                    this.data = {
+                        "frame_type": this.frame_type,
+                        "bssid": this.bssid    
+                    }
+                } else if (this.frame_type == 'data') {
+                    this.data = {
+                        "frame_type": this.frame_type,
+                        "bssid": this.bssid,
+                        "srcmac": this.srcmac,
+                        "dstmac": this.dstmac
+                    }
+                }
+                axios.post('/api/x-aireplay-ng', this.data).then(res => {
+                    console.log(res.data)
+                })
+            }
+        }
+    })
+</script>

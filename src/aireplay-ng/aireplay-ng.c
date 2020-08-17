@@ -150,6 +150,7 @@ static const char usage[] =
 	"      -h smac   : set Source       MAC address\n"
 	"      -g value  : change ring buffer size (default: 8)\n"
 	"      -F        : choose first matching packet\n"
+	"      -X  xmode : choose xmode [beacon|data]\n"
 	"\n"
 	"      Fakeauth attack options:\n"
 	"\n"
@@ -6088,10 +6089,10 @@ static int generate_wlan(void)
 
 	if (!strcasecmp("beacon", opt.x_mode)) {
 		return generate_beacon(&ss);
-	}
-	if (!strcasecmp("data", opt.x_mode)) {
-		return generate_data(&ss);
-
+	} else if (!strcasecmp("data", opt.x_mode)) {
+		return generate_data(&ss); 
+	} else {
+		return (1);
 	}
 	return (0);
 }
@@ -6166,6 +6167,7 @@ int main(int argc, char * argv[])
 			   {"migmode", 0, 0, '8'},
 			   {"ignore-negative-one", 0, &opt.ignore_negative_one, 1},
 			   {"deauth-rc", 1, 0, 'Z'},
+			   {"xarpreplay", 1, 0, 'X'},
 			   {0, 0, 0, 0}};
 
 		int option = getopt_long(argc,
