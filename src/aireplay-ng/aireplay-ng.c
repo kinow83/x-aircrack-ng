@@ -5990,6 +5990,39 @@ static size_t make_etag(uint8_t *h, uint8_t tag_num, size_t tag_len, uint8_t *ta
 	return tag_len+3;
 }
 
+static int generate_wds(struct SESSIONt *ss)
+{
+	uint32_t off = 0;
+	static uint16_t seq = 0;
+	static uint64_t timestamp = 0;
+	memcpy(h80211+off, "\x08\x03\x00\x00", 4); off += 4; // type/subtype, frame control
+	memcpy(h80211+off, ss->dstmac, 6); off += 6; // dest
+	memcpy(h80211+off, ss->bssid, 6); off += 6; // bssid
+	memcpy(h80211+off, ss->srcmac, 6); off += 6; // src
+	seq += 16;
+	memcpy(h80211+off, &seq, 2); off += 2;
+	timestamp += 65536;
+	memcpy(h80211+off, &timestamp, 8); off += 8;
+
+	uint8_t data[256];
+	memcpy(h80211+off, data, sizeof(data)); off += sizeof(data);
+
+	if (send_packet(_wi_out, h80211, (size_t) off, kRewriteDuration) < 0)
+		return (1);
+
+	printf("[data] bssid:%02X:%02X:%02X:%02X:%02X:%02X (%02X:%02X:%02X:%02X:%02X:%02X -> %02X:%02X:%02X:%02X:%02X:%02X)\n", 
+		ss->bssid[0],ss->bssid[1],ss->bssid[2],ss->bssid[3],ss->bssid[4],ss->bssid[5], 
+		ss->srcmac[0],ss->srcmac[1],ss->srcmac[2],ss->srcmac[3],ss->srcmac[4],ss->srcmac[5], 
+		ss->dstmac[0],ss->dstmac[1],ss->dstmac[2],ss->dstmac[3],ss->dstmac[4],ss->dstmac[5]);
+#if 0
+	for (int i=0; i<off; i++) {
+		printf("%02x ", h80211[i]);
+	}
+	printf("\n");
+#endif
+	return (0);
+}
+
 static int generate_data(struct SESSIONt *ss)
 {
 	uint32_t off = 0;
@@ -6091,6 +6124,8 @@ static int generate_wlan(void)
 		return generate_beacon(&ss);
 	} else if (!strcasecmp("data", opt.x_mode)) {
 		return generate_data(&ss); 
+	} else if (!strcasecmp("assoc-req", opt.x_mode)) {
+		return generate_wds(&ss); 
 	} else {
 		return (1);
 	}
