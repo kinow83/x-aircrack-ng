@@ -1,3 +1,15 @@
+Installing
+==========
+x-data.sh: 데이터 전송 스크립트
+
+
+
+
+
+
+
+
+
 # Aircrack-ng
 
 [![Linux/Mac Build Status](https://travis-ci.org/aircrack-ng/aircrack-ng.svg?branch=master)](https://travis-ci.org/aircrack-ng/aircrack-ng)
