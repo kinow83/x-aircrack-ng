@@ -1,4 +1,7 @@
 
+# -a AP (ap)
+# -c dst mac
+# -h src mac (station)
 while [ 1 -eq 1 ]; do
 	sudo ./aireplay-ng -X beacon -a 00:00:00:11:11:11 -e SSSS wlan0mon
 	sudo ./aireplay-ng -X data -a 00:00:00:11:11:11 -c 00:00:00:10:00:01 -h 00:00:00:11:11:22 -e SSSS wlan0mon
